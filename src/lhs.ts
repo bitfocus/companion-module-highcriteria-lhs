@@ -312,6 +312,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	/** Destroy the TCP connection and clean up all resources. */
 	destroy(): void {
 		this._stopHeartbeat()
+		this.queue.clear()
 		if (this.tcp) {
 			this.tcp.destroy()
 			this.tcp = null
