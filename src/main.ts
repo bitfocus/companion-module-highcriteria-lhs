@@ -3,13 +3,14 @@ import { GetConfigFields, type ModuleConfig } from './config.js'
 import { UpdateVariableDefinitions } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions } from './actions.js'
-import { UpdateFeedbacks } from './feedbacks.js'
+import { UpdateFeedbacks, FeedbackId } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
-import { LHSClient } from './lhs.js'
+import { LHSClient, type RecorderState } from './lhs.js'
 
 export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	private config!: ModuleConfig // Setup in init()
 	public client!: LHSClient
+	public recorders: Map<string, RecorderState> = new Map()
 
 	constructor(internal: unknown) {
 		super(internal)
@@ -60,8 +61,16 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		this.client.on('error', (err) => {
 			this.log('error', err.message)
 		})
-		this.client.on('message', (data) => {
-			this.log('debug', `Message Recieved: ${data}`)
+		this.client.on('recorder_state', (state) => {
+			this.log('info', `Recorder State Changed: ${JSON.stringify(state)}`)
+			const oldState = this.recorders.get(state.roomId)
+			this.recorders.set(state.roomId, state)
+			if (state.roomId == this.config.room) {
+				const feedbacksToCheck: FeedbackId[] = []
+				if (oldState?.isPaused != state.isPaused) feedbacksToCheck.push(FeedbackId.isPaused)
+				if (oldState?.isRecording != state.isRecording) feedbacksToCheck.push(FeedbackId.isRecording)
+				if (feedbacksToCheck.length > 0) this.checkFeedbacks(...feedbacksToCheck)
+			}
 		})
 		this.client.on('connected', () => {
 			this.log('info', `Connected to ${config.host}:${config.port}`)
@@ -70,6 +79,10 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			this.log('warn', `Disconnected from ${config.host}:${config.port}`)
 		})
 		this.client.connect()
+	}
+
+	public get room(): Readonly<string> {
+		return this.config?.room ?? ''
 	}
 
 	updateActions(): void {

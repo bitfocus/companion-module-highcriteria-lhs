@@ -3,6 +3,7 @@ import type { CompanionActionDefinition } from '@companion-module/base'
 
 export enum ActionId {
 	NewFile = 'new_file',
+	CloseFile = 'close_file',
 	StartRecording = 'start_recording',
 	StopRecording = 'stop_recording',
 	PauseRecording = 'pause_recording',
@@ -15,15 +16,23 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'New File',
 			options: [],
 			callback: async (_event) => {
-				self.log('info', 'Preparing new file')
+				self.log('info', 'File: New')
 				await self.client.newFile()
+			},
+		},
+		[ActionId.CloseFile]: {
+			name: 'Close File',
+			options: [],
+			callback: async (_event) => {
+				self.log('info', 'File: Close')
+				await self.client.closeFile()
 			},
 		},
 		[ActionId.StartRecording]: {
 			name: 'Start Recording',
 			options: [],
 			callback: async (_event) => {
-				self.log('info', 'Starting Recording')
+				self.log('info', 'Record: Stop')
 				await self.client.startRecording()
 			},
 		},
@@ -31,7 +40,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Stop Recording',
 			options: [],
 			callback: async (_event) => {
-				self.log('info', 'Stopping Recording')
+				self.log('info', 'Record: Stop')
 				await self.client.stopRecording()
 			},
 		},
@@ -39,7 +48,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Pause Recording',
 			options: [],
 			callback: async (_event) => {
-				self.log('info', 'Pauseing Recording')
+				self.log('info', 'Record: Pause')
 				await self.client.pauseRecording()
 			},
 		},
@@ -47,7 +56,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Insert Bookmark',
 			options: [],
 			callback: async (_event) => {
-				self.log('info', 'Inserting Bookmark')
+				self.log('info', 'Bookmark: Insert')
 				await self.client.insertBookmark()
 			},
 		},
