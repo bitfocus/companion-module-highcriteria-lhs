@@ -3,6 +3,8 @@ import { Regex, type SomeCompanionConfigField } from '@companion-module/base'
 export interface ModuleConfig {
 	host: string
 	port: number
+	client: string
+	room: string
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -10,9 +12,9 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 		{
 			type: 'textinput',
 			id: 'host',
-			label: 'Target IP',
+			label: 'LHS Host',
 			width: 8,
-			regex: Regex.IP,
+			regex: Regex.HOSTNAME,
 		},
 		{
 			type: 'number',
@@ -21,7 +23,21 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			width: 4,
 			min: 1,
 			max: 65535,
-			default: 8000,
+			default: 5002,
+		},
+		{
+			type: 'textinput',
+			id: 'client',
+			label: 'Client Name',
+			width: 8,
+			regex: Regex.SOMETHING,
+		},
+		{
+			type: 'textinput',
+			id: 'room',
+			label: 'Room',
+			width: 8,
+			regex: Regex.SOMETHING,
 		},
 	]
 }

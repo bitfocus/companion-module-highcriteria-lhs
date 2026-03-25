@@ -1,3 +1,3 @@
-## Your module
+## Liberty Helper Service
 
-Write some help for your users here!
+Some basic controls for Liberty Court Recorder vis the Liberty Helper Service.

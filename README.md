@@ -1,4 +1,4 @@
-# companion-module-[replace with module name]
+# companion-module-high-criteria-lhs
 
 See [HELP.md](./companion/HELP.md) and [LICENSE](./LICENSE)
 

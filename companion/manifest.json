@@ -1,17 +1,16 @@
 {
 	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
-	"id": "your-module-name",
-	"name": "your-module-name",
-	"shortname": "module-shortname",
-	"description": "A short one line description of your module",
+	"id": "high-criteria-lhs",
+	"name": "high-criteria-lhs",
+	"shortname": "Liberty Helper Serivce",
+	"description": "Liberty Helper Service intergration for companion",
 	"version": "0.0.0",
 	"license": "MIT",
-	"repository": "git+https://github.com/bitfocus/companion-module-your-module-name.git",
-	"bugs": "https://github.com/bitfocus/companion-module-your-module-name/issues",
+	"repository": "git+https://github.com/phillipivan/companion-module-high-criteria-lhs.git",
+	"bugs": "https://github.com/phillipivan/companion-module-high-criteria-lhs/issues",
 	"maintainers": [
 		{
-			"name": "Your name",
-			"email": "Your email"
+			"name": "Phillip Ivan Pietruschka"
 		}
 	],
 	"runtime": {
@@ -21,7 +20,7 @@
 		"entrypoint": "../dist/main.js"
 	},
 	"legacyIds": [],
-	"manufacturer": "Your company",
-	"products": ["Your product"],
-	"keywords": []
+	"manufacturer": "High Criteria",
+	"products": ["Liberty Helper Service"],
+	"keywords": ["Liberty Court Recorder", "LCR", "LHS"]
 }

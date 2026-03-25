@@ -1,9 +1,7 @@
 import type { ModuleInstance } from './main.js'
+import type { CompanionVariableDefinition } from '@companion-module/base'
 
 export function UpdateVariableDefinitions(self: ModuleInstance): void {
-	self.setVariableDefinitions([
-		{ variableId: 'variable1', name: 'My first variable' },
-		{ variableId: 'variable2', name: 'My second variable' },
-		{ variableId: 'variable3', name: 'Another variable' },
-	])
+	const variables: CompanionVariableDefinition[] = []
+	self.setVariableDefinitions(variables)
 }
