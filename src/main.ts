@@ -85,19 +85,19 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		return this.config?.room ?? ''
 	}
 
-	updateActions(): void {
+	private updateActions(): void {
 		UpdateActions(this)
 	}
 
-	updateFeedbacks(): void {
+	private updateFeedbacks(): void {
 		UpdateFeedbacks(this)
 	}
 
-	updatePresets(): void {
+	private updatePresets(): void {
 		UpdatePresets(this)
 	}
 
-	updateVariableDefinitions(): void {
+	private updateVariableDefinitions(): void {
 		UpdateVariableDefinitions(this)
 	}
 }
