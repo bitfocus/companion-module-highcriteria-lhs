@@ -13,7 +13,7 @@ export enum ActionId {
 export function UpdateActions(self: ModuleInstance): void {
 	const actions: Record<ActionId, CompanionActionDefinition> = {
 		[ActionId.NewFile]: {
-			name: 'New File',
+			name: 'File: New',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'File: New')
@@ -21,7 +21,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		[ActionId.CloseFile]: {
-			name: 'Close File',
+			name: 'File: Close',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'File: Close')
@@ -29,7 +29,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		[ActionId.StartRecording]: {
-			name: 'Start Recording',
+			name: 'Recording: Start',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'Record: Stop')
@@ -37,7 +37,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		[ActionId.StopRecording]: {
-			name: 'Stop Recording',
+			name: 'Recording: Stop',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'Record: Stop')
@@ -45,7 +45,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		[ActionId.PauseRecording]: {
-			name: 'Pause Recording',
+			name: 'Recording: Pause',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'Record: Pause')
@@ -53,7 +53,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		[ActionId.InsertBookmark]: {
-			name: 'Insert Bookmark',
+			name: 'Bookmark: Insert',
 			options: [],
 			callback: async (_event) => {
 				self.log('info', 'Bookmark: Insert')
