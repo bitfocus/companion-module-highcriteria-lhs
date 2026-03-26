@@ -30,14 +30,15 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			id: 'client',
 			label: 'Client Name',
 			width: 8,
-			regex: Regex.SOMETHING,
+			regex: '/^[ -~]{0,63}$/',
+			default: 'Companion',
 		},
 		{
 			type: 'textinput',
 			id: 'room',
 			label: 'Room',
 			width: 8,
-			regex: Regex.SOMETHING,
+			regex: '/^[ -~]{0,31}$/',
 		},
 	]
 }
