@@ -261,7 +261,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		super()
 		this.host = options.host
 		this.port = options.port ?? LHS_DEFAULT_PORT
-		this.clientName = options.clientName?.substring(0, 63) ?? 'Companion LHS Client'
+		this.clientName = options.clientName?.substring(0, 63) || 'Companion LHS Client'
 		this.roomName = options.roomName?.substring(0, 31) ?? ''
 		this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 3000
 		this.reconnect = options.reconnect ?? true
