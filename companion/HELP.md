@@ -6,15 +6,13 @@ Some basic controls for Liberty Court Recorder vis the Liberty Helper Service.
 
 -**Bookmark: Insert**
 
--**File: Close**
-
 -**File: New**
 
 -**Recording: Pause**
 
 -**Recording: Start**
 
--**Recording: Stop**
+-**Recording: Stop & Close File**
 
 ### Feedbacks
 
