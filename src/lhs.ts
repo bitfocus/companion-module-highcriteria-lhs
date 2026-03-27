@@ -589,25 +589,40 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	 * Handle LIRSRV_BLOCK_SRV_INITINFO (server's response to our handshake).
 	 *
 	 * LIRSRV_SERVICE_INIT_INFO layout (fixed struct, not variable-length):
-	 *   dwServVersMajor     4 B
-	 *   dwServVersMinor     4 B
-	 *   dwServVersBuild     4 B
-	 *   btProtocolVersMajor 1 B
-	 *   btProtocolVersMinor 1 B
-	 *   szProgName[64]      64 B
+	 *   dwServVersMajor     4 B  → offset  0
+	 *   dwServVersMinor     4 B  → offset  4
+	 *   dwServVersBuild     4 B  → offset  8
+	 *   btProtocolVersMajor 1 B  → offset 12
+	 *   btProtocolVersMinor 1 B  → offset 13
+	 *   szProgName[64]     64 B  → offset 14
 	 */
 	private _handleSrvInitInfo(payload: Buffer): void {
-		if (payload.length < 74) {
+		console.log(`LHSClient SRV_INITINFO raw payload (${payload.length} bytes): ${payload.toString('hex')}`)
+
+		if (payload.length < 78) {
 			this.emit('error', new Error('LHSClient: SRV_INITINFO payload too short'))
 			return
 		}
 
-		const protocolMajor = payload[8] // btProtocolVersMajor (after 3×DWORD)
+		const serverMajor = payload.readUInt32BE(0)
+		const serverMinor = payload.readUInt32BE(4)
+		const serverBuild = payload.readUInt32BE(8)
+		const protocolMajor = payload[12]
+		const protocolMinor = payload[13]
+		const progName = payload.slice(14, 78).toString('ascii').replace(/\0+$/, '')
+
+		console.log(
+			`LHSClient SRV_INITINFO: server=${serverMajor}.${serverMinor}.${serverBuild}` +
+				` protocol=${protocolMajor}.${protocolMinor} prog="${progName}"`,
+		)
 
 		if (protocolMajor !== LIRSRV_PROTOCOL_VERS_MAJOR) {
 			this.emit(
 				'error',
-				new Error(`LHSClient: unsupported protocol version ${protocolMajor} (expected ${LIRSRV_PROTOCOL_VERS_MAJOR})`),
+				new Error(
+					`LHSClient: unsupported protocol version ${protocolMajor}.${protocolMinor}` +
+						` (expected ${LIRSRV_PROTOCOL_VERS_MAJOR}.x)`,
+				),
 			)
 			return
 		}
