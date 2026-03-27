@@ -45,7 +45,7 @@ const enum BlockType {
 	Msg2 = 12, // LIRSRV_MSG_INFO
 	RoomsList2 = 13, // LIRSRV_ROOM_LIST2
 	BmInfo2 = 14, // BOOKMARK_EXCHDESCR2
-	FileInfo2 = 15, // DCR_FILE_DESCR2            — recorder state (v2, protocol ≥ 4.1)
+	FileInfo2 = 15, // DCR_FILE_DESCR2            — file info (protocol ≥ 4.1)
 	RecorderInfo2 = 16, // LIRSRV_RECSTATE_INFO2      — recorder state (v2, protocol ≥ 4.1)
 }
 
@@ -74,13 +74,16 @@ const enum Cmd {
 const enum RecActionFlags {
 	StartRec = 0x01, // RECACTION_STARTREC
 	StopRec = 0x02, // RECACTION_STOPREC
-	CloseFile = 0x04, // RECACTION_CLOSEFILE  — can be OR'd with StopRec
+	CloseFile = 0x04, // RECACTION_CLOSEFILE — can be OR'd with StopRec
 }
 
-/** Flags for Cmd.PauseAction (dwCmdParam1). Confirmed from PCAP: both = 0x04. */
+/**
+ * Flags for Cmd.PauseAction (dwCmdParam1).
+ * Both Pause and Resume were observed as 0x04 in the PCAP — the LHS toggles
+ * state internally on each receipt.
+ */
 const enum PauseActionFlags {
-	Pause = 0x04, // PAUSEACTION_PAUSE    — confirmed from PCAP
-	//Continue = 0x04, // PAUSEACTION_CONTINUE — observed identical in this server version
+	Pause = 0x04, // PAUSEACTION_PAUSE
 }
 
 // ─── Recorder state flags (dwStateF in LIRSRV_RECSTATE_INFO) ─────────────────
@@ -100,20 +103,6 @@ export const RecorderStateFlags = {
 	/** Recording is currently paused (always set alongside RECORDING). */
 	PAUSED: 0x02,
 } as const
-
-// ─── Device / session ID constants ───────────────────────────────────────────
-
-const DEVICE_ID_HANDSHAKE = 0x00aec2bc // observed in capture
-const DEVICE_ID_HEARTBEAT = 0x884adf83 // observed in capture
-const DEVICE_ID_DEFAULT = 0x00000000
-
-// ─── Bookmark payload (hardcoded from PCAP capture) ──────────────────────────
-
-/**
- * Serialised BOOKMARK_EXCHDESCR for a simple "other" type bookmark,
- * extracted verbatim from the PCAP.  Sent as BlockType.BmInfo.
- */
-const BOOKMARK_PAYLOAD = Buffer.from('00ffffffff020000010000010000010000010000', 'hex')
 
 // ─── Default port ─────────────────────────────────────────────────────────────
 
@@ -214,14 +203,14 @@ export interface LHSClientOptions {
  *     24      N   payload
  * ```
  *
- * ## Command payload (BlockType.Cmd, 11 bytes)
+ * ## Command payload (BlockType.Cmd)
  * ```
  *   Offset  Size  Field
- *      0      1   roomIDCmd (null-terminated, empty → just 0x00)
- *      1      1   btCmd     — Cmd enum
+ *      0      1   roomIDCmd  (null-terminated, empty → just 0x00)
+ *      1      1   btCmd      — Cmd enum
  *      2      4   dwCmdParam1 (big-endian)
  *      6      4   dwCmdParam2 (big-endian)
- *     10      1   sCmdInfo  (null-terminated, empty → just 0x00)
+ *     10      1   sCmdInfo   (null-terminated, empty → just 0x00)
  * ```
  *
  * ## Determining recorder state
@@ -249,19 +238,32 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	private readonly heartbeatIntervalMs: number
 	private readonly reconnect: boolean
 	private readonly reconnectIntervalMs: number
-	private queue: PQueue = new PQueue({ concurrency: 1, interval: 20, intervalCap: 1 })
+
+	/** Serialises all outgoing writes — one frame in flight at a time, max one per 20 ms. */
+	private readonly queue: PQueue = new PQueue({ concurrency: 1, interval: 20, intervalCap: 1 })
 
 	private tcp: TCPHelper | null = null
 	private receiveBuffer: Buffer = Buffer.alloc(0)
 	private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
 	/** True once the server has acknowledged our handshake with SRV_INITINFO. */
 	private handshakeAcknowledged = false
+
+	/**
+	 * Random 32-bit socket ID used as the sender in all outgoing messages,
+	 * matching the `m_dwSocketID = myrand32()` pattern from SSClientMobile.
+	 * A consistent ID allows the server to route responses back correctly.
+	 */
+	private readonly socketId: number = (Math.random() * 0xffffffff) >>> 0
+
+	/** Incrementing counter for bookmark IDs — must be unique per session. */
+	private nextBmId = 1
 
 	constructor(options: LHSClientOptions) {
 		super()
 		this.host = options.host
 		this.port = options.port ?? LHS_DEFAULT_PORT
-		this.clientName = options.clientName?.substring(0, 63) || 'Companion LHS Client'
+		this.clientName = options.clientName?.substring(0, 63) ?? 'Companion LHS Client'
 		this.roomName = options.roomName?.substring(0, 31) ?? ''
 		this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 3000
 		this.reconnect = options.reconnect ?? true
@@ -294,6 +296,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		this.tcp.on('connect', () => {
 			this.receiveBuffer = Buffer.alloc(0)
 			this.handshakeAcknowledged = false
+			this.queue.clear()
 			this._sendHandshake().catch(() => {})
 			this._startHeartbeat()
 		})
@@ -332,28 +335,11 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	}
 
 	/**
-	 * Close File — instructs the LHS to close the current recording file.
-	 * Sends a Stop Recording with the `CloseFile` flag set, which is the
-	 * pattern observed for this action.
-	 */
-	async closeFile(): Promise<void> {
-		await this._sendCmd(Cmd.RecAction, RecActionFlags.StopRec | RecActionFlags.CloseFile)
-	}
-
-	/**
 	 * Start Recording — begins audio capture to the current file.
 	 * (Cmd 0x04, param RECACTION_STARTREC = 0x01)
 	 */
 	async startRecording(): Promise<void> {
 		await this._sendCmd(Cmd.RecAction, RecActionFlags.StartRec)
-	}
-
-	/**
-	 * Stop Recording — ends the active recording session.
-	 * (Cmd 0x07, param 0 — as observed in PCAP)
-	 */
-	async stopRecording(): Promise<void> {
-		await this._sendCmd(Cmd.StopRec, 0)
 	}
 
 	/**
@@ -365,25 +351,72 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	}
 
 	/**
-	 * Resume Recording — resumes a paused recording.
-	 * (Cmd 0x08, param PAUSEACTION_CONTINUE = 0x04)
+	 * Insert Bookmark — places a timestamp marker into the active recording.
 	 *
-	 * Note: In the observed PCAP both Pause and Resume produce identical bytes.
-	 * The LHS appears to toggle state internally.  This is consistent with
-	 * PAUSEACTION_PAUSE and PAUSEACTION_CONTINUE sharing the same value (0x04)
-	 * in this server version.
+	 * Serialises a BOOKMARK_EXCHDESCR (BOOKMARK_TYPE_OTHER) per the C++ API
+	 * (CopyBMExchDescrToBuff / CopyBMDescrToBuff):
+	 *   roomIDBM\0          null-terminated string  — matches this.roomName
+	 *   dwBMId              4 B BE                  — unique incrementing ID
+	 *   btBmType            1 B                     — 0x02 (BOOKMARK_TYPE_OTHER)
+	 *   btReadOnlyBM        1 B                     — 0x00
+	 *   btUsedCaseFields    1 B                     — 0x00
+	 *   [4 × field record]  using(1) + name\0 + val\0
+	 *
+	 * @param note  Optional text label attached to the bookmark's note field.
 	 */
-	/* async resumeRecording(): Promise<void> {
-		await this._sendCmd(Cmd.PauseAction, PauseActionFlags.Pause)
-	} */
+	async insertBookmark(note = ''): Promise<void> {
+		const bmId = this.nextBmId++
+		const room = Buffer.from(this.roomName, 'ascii')
+		const noteB = Buffer.from(note, 'ascii')
+
+		// 4 field records: using(1B) + name\0(1B) + val\0(variable).
+		// Field 0 is the note field — it receives the note value.
+		// The remaining 3 fields are empty.
+		const NUM_FIELDS = 4
+		const NOTE_FIELD = 0
+
+		const fieldBufs: Buffer[] = []
+		for (let i = 0; i < NUM_FIELDS; i++) {
+			const val = i === NOTE_FIELD ? noteB : Buffer.alloc(0)
+			fieldBufs.push(
+				Buffer.from([0x01]), // abtFieldUsing = 1
+				Buffer.from([0x00]), // asFieldNames[i] = "" (null terminator)
+				val,
+				Buffer.from([0x00]), // asFieldVals[i] null terminator
+			)
+		}
+
+		const header = Buffer.alloc(7)
+		header.writeUInt32BE(bmId, 0) // dwBMId
+		header[4] = 0x02 // btBmType = BOOKMARK_TYPE_OTHER
+		header[5] = 0x00 // btReadOnlyBM
+		header[6] = 0x00 // btUsedCaseFields
+
+		const payload = Buffer.concat([
+			room,
+			Buffer.from([0x00]), // roomIDBM null terminator
+			header,
+			...fieldBufs,
+		])
+
+		await this._sendBlock(BlockType.BmInfo, payload)
+	}
 
 	/**
-	 * Insert Bookmark — places a timestamp marker into the active recording.
-	 * Sends a serialised BOOKMARK_EXCHDESCR (BOOKMARK_TYPE_OTHER) as
-	 * BlockType.BmInfo, using the payload captured directly from the PCAP.
+	 * Stop Recording — ends the active recording session.
+	 * The LHS automatically closes the file on stop.
+	 * (Cmd 0x07, param 0 — as observed in PCAP)
 	 */
-	async insertBookmark(): Promise<void> {
-		await this._sendBlock(BlockType.BmInfo, BOOKMARK_PAYLOAD, DEVICE_ID_DEFAULT)
+	async stopRecording(): Promise<void> {
+		await this._sendCmd(Cmd.StopRec, 0)
+	}
+
+	/**
+	 * Close File — alias for stopRecording().
+	 * The LHS closes the file as part of the stop command.
+	 */
+	async closeFile(): Promise<void> {
+		await this.stopRecording()
 	}
 
 	// ─── Private — heartbeat ──────────────────────────────────────────────────
@@ -397,8 +430,8 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		if (this.heartbeatTimer) return
 		this.heartbeatTimer = setInterval(() => {
 			if (!this.tcp?.isConnected) return
-			this._sendCmd(Cmd.HeartbeatA, 0, DEVICE_ID_HEARTBEAT).catch(() => {})
-			this._sendCmd(Cmd.HeartbeatB, 0, DEVICE_ID_HEARTBEAT).catch(() => {})
+			this._sendCmd(Cmd.HeartbeatA, 0).catch(() => {})
+			this._sendCmd(Cmd.HeartbeatB, 0).catch(() => {})
 		}, this.heartbeatIntervalMs)
 	}
 
@@ -415,14 +448,9 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	 * Build a complete framed message:
 	 *   [MAGIC_START][sender:4][target:4][dataType:4][dataSize:4][0:4][0:4][payload][MAGIC_END]
 	 */
-	private _buildFrame(
-		dataType: BlockType,
-		payload: Buffer,
-		sender: number = DEVICE_ID_DEFAULT,
-		target: number = 0,
-	): Buffer {
+	private _buildFrame(dataType: BlockType, payload: Buffer, target = 0): Buffer {
 		const head = Buffer.alloc(LIRSRV_HEAD_SIZE)
-		head.writeUInt32BE(sender, 0)
+		head.writeUInt32BE(this.socketId, 0)
 		head.writeUInt32BE(target, 4)
 		head.writeUInt32BE(dataType, 8)
 		head.writeUInt32BE(payload.length, 12)
@@ -432,10 +460,10 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	}
 
 	/**
-	 * Build a BlockType.Cmd payload (11 bytes):
-	 *   [0x00 roomIDCmd terminator][btCmd][dwCmdParam1:4 BE][dwCmdParam2:4 BE][0x00 sCmdInfo terminator]
+	 * Build a BlockType.Cmd payload:
+	 *   [roomIDCmd\0][btCmd][dwCmdParam1:4 BE][dwCmdParam2:4 BE][sCmdInfo\0]
 	 */
-	private _buildCmdPayload(cmd: Cmd, param1: number, param2: number = 0): Buffer {
+	private _buildCmdPayload(cmd: Cmd, param1: number, param2 = 0): Buffer {
 		const buf = Buffer.alloc(11)
 		buf[0] = 0x00 // empty roomIDCmd string terminator
 		buf[1] = cmd // btCmd
@@ -446,33 +474,27 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	}
 
 	/** Build and send a BlockType.Cmd message. */
-	private async _sendCmd(
-		cmd: Cmd,
-		param1: number,
-		sender: number = DEVICE_ID_DEFAULT,
-		param2: number = 0,
-	): Promise<void> {
-		const payload = this._buildCmdPayload(cmd, param1, param2)
-		await this._sendBlock(BlockType.Cmd, payload, sender)
+	private async _sendCmd(cmd: Cmd, param1: number, param2 = 0): Promise<void> {
+		await this._sendBlock(BlockType.Cmd, this._buildCmdPayload(cmd, param1, param2))
 	}
 
 	/** Build and send a raw block of any type. */
-	private async _sendBlock(dataType: BlockType, payload: Buffer, sender: number = DEVICE_ID_DEFAULT): Promise<void> {
-		await this._sendRaw(this._buildFrame(dataType, payload, sender))
+	private async _sendBlock(dataType: BlockType, payload: Buffer): Promise<void> {
+		await this._sendRaw(this._buildFrame(dataType, payload))
 	}
 
 	/**
 	 * Send the initial CLIENT_INITINFO handshake (BlockType.ClientInitInfo).
 	 *
 	 * LIRSRV_CLIENT_INIT_INFO payload (120 bytes):
-	 *   dwClientType        4 B  — LIRSRV_CLIENT_MOBILE (observed 0x00000002)
+	 *   dwClientType        4 B  — LIRSRV_CLIENT_MOBILE = 0x00000002
 	 *   dwClientVersMajor   4 B
 	 *   dwClientVersMinor   4 B
 	 *   dwClientVersBuild   4 B
 	 *   dwProtocolVersMajor 4 B  — 4
 	 *   dwProtocolVersMinor 4 B  — 1
-	 *   szProgName[64]      64 B — null-padded ASCII
-	 *   roomID[32]          32 B — null-padded ASCII
+	 *   szProgName[64]     64 B  — null-padded ASCII
+	 *   roomID[32]         32 B  — null-padded ASCII
 	 */
 	private async _sendHandshake(): Promise<void> {
 		const LIRSRV_CLIENT_MOBILE = 0x00000002
@@ -488,19 +510,26 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		Buffer.from(this.clientName, 'ascii').copy(payload, 24, 0, PROG_NAME_LEN - 1)
 		Buffer.from(this.roomName, 'ascii').copy(payload, 88, 0, MAX_ROOM_NAME_LEN - 1)
 
-		await this._sendBlock(BlockType.ClientInitInfo, payload, DEVICE_ID_HANDSHAKE)
+		await this._sendBlock(BlockType.ClientInitInfo, payload)
 	}
 
-	/** Write a raw frame to the TCP socket. Emits 'error' if not connected. */
+	/**
+	 * Enqueue a raw frame for sending.
+	 * PQueue ensures frames are sent one at a time with a minimum 20 ms gap,
+	 * preventing the LHS from being overwhelmed by bursts.
+	 */
 	private async _sendRaw(data: Buffer): Promise<boolean> {
-		return await this.queue.add(async () => {
-			if (!this.tcp || !this.tcp.isConnected) {
-				this.emit('error', new Error('LHSClient: not connected'))
-				return false
-			}
-			return await this.tcp.send(data)
-		})
+		return (
+			(await this.queue.add(async () => {
+				if (!this.tcp?.isConnected) {
+					this.emit('error', new Error('LHSClient: not connected'))
+					return false
+				}
+				return this.tcp.send(data)
+			})) ?? false
+		)
 	}
+
 	// ─── Private — receive framing & dispatch ─────────────────────────────────
 
 	/** Accumulate bytes and extract complete LISv-framed messages. */
@@ -522,7 +551,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 			// Need at least magic + header to know total size.
 			if (this.receiveBuffer.length < LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE) break
 
-			// Read data size from header without consuming the buffer yet.
+			// Read payload size from header without consuming the buffer yet.
 			const dataSize = this.receiveBuffer.readUInt32BE(LIRSRV_SIG_SIZE + 12)
 			const frameLen = LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE + dataSize + LIRSRV_SIG_SIZE
 
@@ -536,16 +565,10 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 				break
 			}
 
-			// Extract and dispatch.
+			// Extract header fields and payload.
 			const head = this.receiveBuffer.slice(LIRSRV_SIG_SIZE, LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE)
 			const payload = this.receiveBuffer.slice(LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE, endOffset)
-
-			const sender = head.readUInt32BE(0)
-			const target = head.readUInt32BE(4)
 			const dataType = head.readUInt32BE(8) as BlockType
-
-			void sender
-			void target // available for future use
 
 			this._dispatchBlock(dataType, payload)
 
@@ -559,23 +582,18 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 			case BlockType.SrvInitInfo:
 				this._handleSrvInitInfo(payload)
 				break
-
 			case BlockType.RecorderInfo:
 				this._handleRecorderInfo(payload, false)
 				break
-
 			case BlockType.RecorderInfo2:
 				this._handleRecorderInfo(payload, true)
 				break
-
 			case BlockType.KeepAlive:
 				// No action required — server just confirming it's alive.
 				break
-
 			case BlockType.Cmd:
 				this._handleIncomingCmd(payload)
 				break
-
 			// FileInfo, BmInfo, RoomsList etc. are not needed for recording control.
 			// Add cases here if you need to react to file or bookmark events.
 			default:
@@ -588,19 +606,18 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	/**
 	 * Handle LIRSRV_BLOCK_SRV_INITINFO (server's response to our handshake).
 	 *
-	 * LIRSRV_SERVICE_INIT_INFO layout (fixed struct, not variable-length):
+	 * LIRSRV_SERVICE_INIT_INFO layout (fixed struct):
 	 *   dwServVersMajor     4 B  → offset  0
 	 *   dwServVersMinor     4 B  → offset  4
 	 *   dwServVersBuild     4 B  → offset  8
 	 *   btProtocolVersMajor 1 B  → offset 12
 	 *   btProtocolVersMinor 1 B  → offset 13
 	 *   szProgName[64]     64 B  → offset 14
+	 *   Total: 78 bytes
 	 */
 	private _handleSrvInitInfo(payload: Buffer): void {
-		console.log(`LHSClient SRV_INITINFO raw payload (${payload.length} bytes): ${payload.toString('hex')}`)
-
 		if (payload.length < 78) {
-			this.emit('error', new Error('LHSClient: SRV_INITINFO payload too short'))
+			this.emit('error', new Error(`LHSClient: SRV_INITINFO payload too short (${payload.length} bytes, expected ≥78)`))
 			return
 		}
 
@@ -637,7 +654,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	 * Parse a LIRSRV_BLOCK_RECORDERINFO (v1) or RECORDERINFO2 (v2) payload
 	 * and emit a `recorder_state` event.
 	 *
-	 * Wire format (variable-length fields serialised by CopyRecStateToBuff[2]):
+	 * Wire format (CopyRecStateToBuff[2]):
 	 *   roomIDRS       null-terminated string  (≤ MAX_ROOM_NAME_LEN = 32 chars)
 	 *   dwStateF       4 B BE  — recorder state bit flags
 	 *   dwEnabledF     4 B BE  — enabled feature flags
@@ -658,7 +675,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		const roomId = payload.slice(offset, roomIdEnd).toString('ascii')
 		offset = roomIdEnd + 1
 
-		// Need 5 DWORDs after the room ID.
+		// Need 5 DWORDs (20 bytes) after the room ID string.
 		if (payload.length < offset + 20) {
 			this.emit('error', new Error('LHSClient: RECORDERINFO payload too short'))
 			return
@@ -670,10 +687,8 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		offset += 4
 		const alertFlags = payload.readUInt32BE(offset)
 		offset += 4
-		/* dwReserved1 */ payload.readUInt32BE(offset)
-		offset += 4
-		/* dwReserved2 */ payload.readUInt32BE(offset)
-		offset += 4
+		offset += 4 // dwReserved1
+		offset += 4 // dwReserved2
 
 		// v2 appends a null-terminated court ID string.
 		let courtId = ''
@@ -684,7 +699,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 			}
 		}
 
-		const state: RecorderState = {
+		this.emit('recorder_state', {
 			roomId,
 			courtId,
 			stateFlags,
@@ -692,9 +707,7 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 			alertFlags,
 			isRecording: (stateFlags & RecorderStateFlags.RECORDING) !== 0,
 			isPaused: (stateFlags & RecorderStateFlags.PAUSED) !== 0,
-		}
-
-		this.emit('recorder_state', state)
+		})
 	}
 
 	/**
@@ -708,33 +721,27 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	 *   sCmdInfo       null-terminated string
 	 */
 	private _handleIncomingCmd(payload: Buffer): void {
-		let offset = 0
-
 		// Skip roomIDCmd.
-		const roomEnd = payload.indexOf(0x00, offset)
+		const roomEnd = payload.indexOf(0x00)
 		if (roomEnd === -1) return
-		offset = roomEnd + 1
+		let offset = roomEnd + 1
 
 		if (payload.length < offset + 9) return // btCmd + 2×DWORD
 
-		const btCmd = payload[offset]
+		const btCmd = payload[offset] as Cmd
 		offset += 1
 		const param1 = payload.readUInt32BE(offset)
-		offset += 4
-		/* param2 */ payload.readUInt32BE(offset)
-		offset += 4
 
-		switch (btCmd as Cmd) {
+		switch (btCmd) {
 			case Cmd.NotifyRecorderRunning:
-				// Server telling us the recorder application itself is running.
-				// param1 = 1 running, 0 not running. Not the same as recording state.
-				// The recorder_state event (from RECORDERINFO) carries actual rec state.
+				// Server notifying us whether the recorder application is running.
+				// param1 = 1 running, 0 not running. Not the same as actively recording.
+				// Actual recording state comes from the recorder_state event (RECORDERINFO).
+				void param1
 				break
 
 			default:
 				break
 		}
-
-		void param1 // suppress unused warning — extend as needed
 	}
 }
