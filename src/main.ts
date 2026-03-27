@@ -63,9 +63,9 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		})
 		this.client.on('recorder_state', (state) => {
 			this.log('info', `Recorder State Changed: ${JSON.stringify(state)}`)
-			const oldState = this.recorders.get(state.roomId)
-			this.recorders.set(state.roomId, state)
-			if (state.roomId == this.config.room) {
+			const oldState = this.recorders.get(state.roomId || this.config.room)
+			this.recorders.set(state.roomId || this.config.room, state)
+			if (state.roomId == this.config.room || state.roomId == '') {
 				const feedbacksToCheck: FeedbackId[] = []
 				if (oldState?.isPaused != state.isPaused) feedbacksToCheck.push(FeedbackId.isPaused)
 				if (oldState?.isRecording != state.isRecording) feedbacksToCheck.push(FeedbackId.isRecording)
