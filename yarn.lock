@@ -1229,9 +1229,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"high-criteria-lhs@workspace:.":
+"highcriteria-lhs@workspace:.":
   version: 0.0.0-use.local
-  resolution: "high-criteria-lhs@workspace:."
+  resolution: "highcriteria-lhs@workspace:."
   dependencies:
     "@companion-module/base": "npm:~2.0.3"
     "@companion-module/tools": "npm:^3.0.0"
