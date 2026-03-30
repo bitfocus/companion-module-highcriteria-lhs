@@ -1,5 +1,5 @@
-import type { ModuleInstance } from './main.js'
-import type { CompanionActionDefinition } from '@companion-module/base'
+import type ModuleInstance from './main.js'
+import type { CompanionActionDefinitions } from '@companion-module/base'
 
 export enum ActionId {
 	NewFile = 'new_file',
@@ -10,8 +10,32 @@ export enum ActionId {
 	//InsertBookmark = 'insert_bookmark',
 }
 
+export type ActionSchema = {
+	[ActionId.NewFile]: {
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
+	[ActionId.CloseFile]: {
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
+	[ActionId.StartRecording]: {
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
+	[ActionId.StopRecording]: {
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
+	[ActionId.PauseRecording]: {
+		options: {
+			method: 'pause' | 'resume' | 'toggle'
+		}
+	}
+}
+
 export function UpdateActions(self: ModuleInstance): void {
-	const actions: Record<ActionId, CompanionActionDefinition> = {
+	const actions: CompanionActionDefinitions<ActionSchema> = {
 		[ActionId.NewFile]: {
 			name: 'File: New',
 			options: [],
@@ -58,6 +82,7 @@ export function UpdateActions(self: ModuleInstance): void {
 						{ id: 'toggle', label: 'Toggle' },
 					],
 					allowCustom: false,
+					expressionDescription: `Return: pause | resume | toggle`,
 				},
 			],
 			callback: async (event) => {

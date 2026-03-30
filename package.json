@@ -1,6 +1,6 @@
 {
 	"name": "high-criteria-lhs",
-	"version": "0.2.1",
+	"version": "1.0.0",
 	"main": "dist/main.js",
 	"type": "module",
 	"scripts": {
@@ -16,18 +16,18 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/phillipivan/companion-module-high-criteria-lhs.git"
+		"url": "git+https://github.com/bitfocus/companion-module-highcriteria-lhs.git"
 	},
 	"engines": {
 		"node": "^22.20",
 		"yarn": "^4"
 	},
 	"dependencies": {
-		"@companion-module/base": "~1.14.1",
+		"@companion-module/base": "~2.0.3",
 		"p-queue": "^9.1.0"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^2.7.1",
+		"@companion-module/tools": "^3.0.0",
 		"@types/node": "^22.19.15",
 		"eslint": "^9.39.4",
 		"husky": "^9.1.7",

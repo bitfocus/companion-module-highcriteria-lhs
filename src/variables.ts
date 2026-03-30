@@ -1,7 +1,7 @@
-import type { ModuleInstance } from './main.js'
-import type { CompanionVariableDefinition } from '@companion-module/base'
+import type ModuleInstance from './main.js'
+//import type { CompanionVariableDefinitions } from '@companion-module/base'
 
-export function UpdateVariableDefinitions(self: ModuleInstance): void {
-	const variables: CompanionVariableDefinition[] = []
-	self.setVariableDefinitions(variables)
+export function UpdateVariableDefinitions(_self: ModuleInstance): void {
+	//const variables: CompanionVariableDefinitions = {}
+	//self.setVariableDefinitions(variables)
 }

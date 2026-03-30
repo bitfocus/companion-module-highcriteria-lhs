@@ -1,4 +1,4 @@
-import { InstanceBase, runEntrypoint, InstanceStatus, SomeCompanionConfigField } from '@companion-module/base'
+import { InstanceBase, InstanceStatus, SomeCompanionConfigField } from '@companion-module/base'
 import { GetConfigFields, type ModuleConfig } from './config.js'
 import { UpdateVariableDefinitions } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
@@ -6,9 +6,12 @@ import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks, FeedbackId } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import { LHSClient, type RecorderState } from './lhs.js'
+import type { InstanceBaseExt, LhsTypes } from './types.js'
 
-export class ModuleInstance extends InstanceBase<ModuleConfig> {
-	private config!: ModuleConfig // Setup in init()
+export { UpgradeScripts }
+
+export default class ModuleInstance extends InstanceBase<LhsTypes> implements InstanceBaseExt {
+	public config!: ModuleConfig // Setup in init()
 	public client!: LHSClient
 	public recorders: Map<string, RecorderState> = new Map()
 
@@ -69,7 +72,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 				const feedbacksToCheck: FeedbackId[] = []
 				if (oldState?.isPaused != state.isPaused) feedbacksToCheck.push(FeedbackId.isPaused)
 				if (oldState?.isRecording != state.isRecording) feedbacksToCheck.push(FeedbackId.isRecording)
-				if (feedbacksToCheck.length > 0) this.checkFeedbacks(...feedbacksToCheck)
+				if (feedbacksToCheck.length > 0) this.checkFeedbacks(feedbacksToCheck[0], ...feedbacksToCheck)
 			}
 		})
 		this.client.on('connected', () => {
@@ -101,5 +104,3 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		UpdateVariableDefinitions(this)
 	}
 }
-
-runEntrypoint(ModuleInstance, UpgradeScripts)

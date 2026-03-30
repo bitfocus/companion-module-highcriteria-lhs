@@ -1,13 +1,13 @@
 {
 	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
-	"id": "high-criteria-lhs",
-	"name": "high-criteria-lhs",
+	"id": "highcriteria-lhs",
+	"name": "highcriteria-lhs",
 	"shortname": "Liberty Helper Serivce",
 	"description": "Liberty Helper Service intergration for companion",
 	"version": "0.0.0",
 	"license": "MIT",
-	"repository": "git+https://github.com/phillipivan/companion-module-high-criteria-lhs.git",
-	"bugs": "https://github.com/phillipivan/companion-module-high-criteria-lhs/issues",
+	"repository": "git+https://github.com/bitfocus/companion-module-highcriteria-lhs.git",
+	"bugs": "https://github.com/bitfocus/companion-module-highcriteria-lhs/issues",
 	"maintainers": [
 		{
 			"name": "Phillip Ivan Pietruschka"

@@ -1,9 +1,22 @@
-import { type CompanionBooleanFeedbackDefinition, combineRgb } from '@companion-module/base'
-import type { ModuleInstance } from './main.js'
+import { type CompanionFeedbackDefinitions, combineRgb } from '@companion-module/base'
+import type ModuleInstance from './main.js'
 
 export enum FeedbackId {
 	isRecording = 'recording',
 	isPaused = 'paused',
+}
+
+export type FeedbackSchema = {
+	[FeedbackId.isRecording]: {
+		type: 'boolean'
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
+	[FeedbackId.isPaused]: {
+		type: 'boolean'
+		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+		options: {}
+	}
 }
 
 const defaultStyle = {
@@ -12,7 +25,7 @@ const defaultStyle = {
 }
 
 export function UpdateFeedbacks(self: ModuleInstance): void {
-	const feedbacks: Record<FeedbackId, CompanionBooleanFeedbackDefinition> = {
+	const feedbacks: CompanionFeedbackDefinitions<FeedbackSchema> = {
 		[FeedbackId.isPaused]: {
 			name: 'Paused',
 			type: 'boolean',
