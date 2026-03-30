@@ -74,7 +74,8 @@ const enum Cmd {
 const enum RecActionFlags {
 	StartRec = 0x01, // RECACTION_STARTREC
 	StopRec = 0x02, // RECACTION_STOPREC
-	CloseFile = 0x04, // RECACTION_CLOSEFILE — can be OR'd with StopRec
+	DefCase = 0x04,
+	CloseFile = 0x08, // was 0x04
 }
 
 /**
@@ -83,7 +84,9 @@ const enum RecActionFlags {
  * state internally on each receipt.
  */
 const enum PauseActionFlags {
-	Pause = 0x04, // PAUSEACTION_PAUSE
+	Pause = 0x01, // PAUSEACTION_PAUSE
+	Continue = 0x02, // PAUSEACTION_CONTINUE
+	Toggle = 0x04, // PAUSEACTION_PAUSECONT — what your code currently sends
 }
 
 // ─── Recorder state flags (dwStateF in LIRSRV_RECSTATE_INFO) ─────────────────
@@ -344,10 +347,26 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 
 	/**
 	 * Pause Recording — pauses the active recording.
-	 * (Cmd 0x08, param PAUSEACTION_PAUSE = 0x04)
+	 * (Cmd 0x08, param PAUSEACTION_PAUSE = 0x01)
 	 */
 	async pauseRecording(): Promise<void> {
 		await this._sendCmd(Cmd.PauseAction, PauseActionFlags.Pause)
+	}
+
+	/**
+	 * Continue Recording — resumes the active recording.
+	 * (Cmd 0x08, param PAUSEACTION_PAUSE = 0x02)
+	 */
+	async continueRecording(): Promise<void> {
+		await this._sendCmd(Cmd.PauseAction, PauseActionFlags.Continue)
+	}
+
+	/**
+	 * Toggle Recording — toggle the active recording.
+	 * (Cmd 0x08, param PAUSEACTION_Toggle = 0x04)
+	 */
+	async pauseContRecording(): Promise<void> {
+		await this._sendCmd(Cmd.PauseAction, PauseActionFlags.Toggle)
 	}
 
 	/**
@@ -369,11 +388,10 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		const room = Buffer.from(this.roomName, 'ascii')
 		const noteB = Buffer.from(note, 'ascii')
 
-		// 4 field records: using(1B) + name\0(1B) + val\0(variable).
-		// Field 0 is the note field — it receives the note value.
-		// The remaining 3 fields are empty.
+		// Field layout: POS(0), TIME(1), NOTE(2), DISPSTRING(3)
+		// btUsedCaseFields=0 → serializer writes exactly these 4 fields
 		const NUM_FIELDS = 4
-		const NOTE_FIELD = 0
+		const NOTE_FIELD = 2 // ← was 0, must be BOOKMARK_FIELD_NOTE = 2
 
 		const fieldBufs: Buffer[] = []
 		for (let i = 0; i < NUM_FIELDS; i++) {
@@ -387,19 +405,14 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 		}
 
 		const header = Buffer.alloc(7)
-		header.writeUInt32BE(bmId, 0) // dwBMId
+		header.writeUInt32BE(bmId, 0)
 		header[4] = 0x02 // btBmType = BOOKMARK_TYPE_OTHER
 		header[5] = 0x00 // btReadOnlyBM
 		header[6] = 0x00 // btUsedCaseFields
 
-		const payload = Buffer.concat([
-			room,
-			Buffer.from([0x00]), // roomIDBM null terminator
-			header,
-			...fieldBufs,
-		])
+		const payload = Buffer.concat([room, Buffer.from([0x00]), header, ...fieldBufs, Buffer.from([0x00])])
 
-		await this._sendBlock(BlockType.BmInfo, payload)
+		await this._sendBlock(BlockType.BmInfo2, payload)
 	}
 
 	/**
@@ -408,15 +421,15 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 	 * (Cmd 0x07, param 0 — as observed in PCAP)
 	 */
 	async stopRecording(): Promise<void> {
-		await this._sendCmd(Cmd.StopRec, 0)
+		await this._sendCmd(Cmd.RecAction, RecActionFlags.StopRec)
 	}
 
 	/**
-	 * Close File — alias for stopRecording().
+	 * Close File — stops active recording and closes file.
 	 * The LHS closes the file as part of the stop command.
 	 */
 	async closeFile(): Promise<void> {
-		await this.stopRecording()
+		await this._sendCmd(Cmd.StopRec, 0)
 	}
 
 	// ─── Private — heartbeat ──────────────────────────────────────────────────
