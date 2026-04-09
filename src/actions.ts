@@ -87,7 +87,7 @@ export function UpdateActions(self: ModuleInstance): void {
 			],
 			callback: async (event) => {
 				self.log('info', `${event.actionId}:${event.id}- ${event.options.method}`)
-				const method = event.options.method?.toString()
+				const method = event.options.method
 				switch (method) {
 					case 'pause':
 						await self.client.pauseRecording()
