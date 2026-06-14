@@ -9,13 +9,11 @@ export enum FeedbackId {
 export type FeedbackSchema = {
 	[FeedbackId.isRecording]: {
 		type: 'boolean'
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 	[FeedbackId.isPaused]: {
 		type: 'boolean'
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 }
 

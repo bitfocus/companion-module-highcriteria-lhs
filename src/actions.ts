@@ -12,20 +12,16 @@ export enum ActionId {
 
 export type ActionSchema = {
 	[ActionId.NewFile]: {
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 	[ActionId.CloseFile]: {
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 	[ActionId.StartRecording]: {
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 	[ActionId.StopRecording]: {
-		// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-		options: {}
+		options: Record<string, never>
 	}
 	[ActionId.PauseRecording]: {
 		options: {
