@@ -1,6 +1,7 @@
 {
 	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
 	"id": "highcriteria-lhs",
+	"type": "connection",
 	"name": "highcriteria-lhs",
 	"shortname": "Liberty Helper Service",
 	"description": "Liberty Helper Service integration for companion",
