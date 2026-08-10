@@ -24,13 +24,25 @@ const LIR_CTRL_VERS_MAJOR = 0x00
 const LIR_CTRL_VERS_MINOR = 0x00
 const LIR_CTRL_VERS_BUILD = 0x00
 
+/** Assert value is of enum type */
+
+function assertEnumValue<T extends Record<string, string | number>>(
+	value: unknown,
+	enumObj: T,
+	enumName = 'enum',
+): asserts value is T[keyof T] {
+	if (!Object.values(enumObj).includes(value as T[keyof T])) {
+		throw new Error(`Invalid value "${String(value)}" for ${enumName}`)
+	}
+}
+
 // ─── Block type enum (LIRSRV_BLOCK_TYPE) ─────────────────────────────────────
 
 /**
  * Block type IDs as they appear in the ulDataType field of the exchange header.
  * Values match the C++ enum LIRSRV_BLOCK_TYPE starting at 1.
  */
-const enum BlockType {
+enum BlockType {
 	SrvInitInfo = 1, // LIRSRV_SERVICE_INIT_INFO   — server → client on connect
 	ClientInitInfo = 2, // LIRSRV_CLIENT_INIT_INFO    — client → server on connect
 	BmInfo = 3, // BOOKMARK_EXCHDESCR         — bookmark add/modify/delete
@@ -55,7 +67,7 @@ const enum BlockType {
  * Command byte codes as observed in the PCAP and cross-referenced with the C++ API.
  * These appear in the btCmd byte of a LIRSRV_CMD_INFO payload.
  */
-const enum Cmd {
+enum Cmd {
 	// Incoming commands (server → client)
 	NotifyRecorderRunning = 0x01, // param1: 1=running, 0=not
 
@@ -71,7 +83,7 @@ const enum Cmd {
 // ─── Command parameter flags ──────────────────────────────────────────────────
 
 /** Flags for Cmd.RecAction (dwCmdParam1). */
-const enum RecActionFlags {
+enum RecActionFlags {
 	StartRec = 0x01, // RECACTION_STARTREC
 	StopRec = 0x02, // RECACTION_STOPREC
 	DefCase = 0x04,
@@ -83,7 +95,7 @@ const enum RecActionFlags {
  * Both Pause and Resume were observed as 0x04 in the PCAP — the LHS toggles
  * state internally on each receipt.
  */
-const enum PauseActionFlags {
+enum PauseActionFlags {
 	Pause = 0x01, // PAUSEACTION_PAUSE
 	Continue = 0x02, // PAUSEACTION_CONTINUE
 	Toggle = 0x04, // PAUSEACTION_PAUSECONT — what your code currently sends
@@ -581,9 +593,13 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 			// Extract header fields and payload.
 			const head = this.receiveBuffer.slice(LIRSRV_SIG_SIZE, LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE)
 			const payload = this.receiveBuffer.slice(LIRSRV_SIG_SIZE + LIRSRV_HEAD_SIZE, endOffset)
-			const dataType = head.readUInt32BE(8) as BlockType
-
-			this._dispatchBlock(dataType, payload)
+			const dataType = head.readUInt32BE(8)
+			try {
+				assertEnumValue(dataType, BlockType, 'BlockType')
+				this._dispatchBlock(dataType, payload)
+			} catch (err) {
+				this.emit('error', err instanceof Error ? err : new Error(String(err)))
+			}
 
 			this.receiveBuffer = this.receiveBuffer.slice(frameLen)
 		}
@@ -741,7 +757,8 @@ export class LHSClient extends EventEmitter<LHSClientEvents> {
 
 		if (payload.length < offset + 9) return // btCmd + 2×DWORD
 
-		const btCmd = payload[offset] as Cmd
+		const btCmd = payload[offset]
+		assertEnumValue(btCmd, Cmd, 'Cmd')
 		offset += 1
 		const param1 = payload.readUInt32BE(offset)
 
